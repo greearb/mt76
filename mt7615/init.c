@@ -12,13 +12,13 @@
 #include "mac.h"
 #include "eeprom.h"
 
-void mt7615_phy_init(struct mt7615_dev *dev)
+static void
+mt7615_phy_init(struct mt7615_dev *dev)
 {
 	/* disable rf low power beacon mode */
 	mt76_set(dev, MT_WF_PHY_WF2_RFCTRL0(0), MT_WF_PHY_WF2_RFCTRL0_LPBCN_EN);
 	mt76_set(dev, MT_WF_PHY_WF2_RFCTRL0(1), MT_WF_PHY_WF2_RFCTRL0_LPBCN_EN);
 }
-EXPORT_SYMBOL_GPL(mt7615_phy_init);
 
 static void
 mt7615_init_mac_chain(struct mt7615_dev *dev, int chain)
@@ -79,7 +79,8 @@ mt7615_init_mac_chain(struct mt7615_dev *dev, int chain)
 	}
 }
 
-void mt7615_mac_init(struct mt7615_dev *dev)
+static void
+mt7615_mac_init(struct mt7615_dev *dev)
 {
 	int i;
 
@@ -128,9 +129,9 @@ void mt7615_mac_init(struct mt7615_dev *dev)
 		mt7615_init_mac_chain(dev, 1);
 	}
 }
-EXPORT_SYMBOL_GPL(mt7615_mac_init);
 
-void mt7615_check_offload_capability(struct mt7615_dev *dev)
+static void
+mt7615_check_offload_capability(struct mt7615_dev *dev)
 {
 	struct ieee80211_hw *hw = mt76_hw(dev);
 	struct wiphy *wiphy = hw->wiphy;
@@ -162,7 +163,6 @@ void mt7615_check_offload_capability(struct mt7615_dev *dev)
 		wiphy->max_sched_scan_reqs = 0;
 	}
 }
-EXPORT_SYMBOL_GPL(mt7615_check_offload_capability);
 
 bool mt7615_wait_for_mcu_init(struct mt7615_dev *dev)
 {
@@ -291,6 +291,16 @@ void mt7615_init_txpower(struct mt7615_dev *dev,
 }
 EXPORT_SYMBOL_GPL(mt7615_init_txpower);
 
+void mt7615_init_work(struct mt7615_dev *dev)
+{
+	mt7615_mcu_set_eeprom(dev);
+	mt7615_mac_init(dev);
+	mt7615_phy_init(dev);
+	mt7615_mcu_del_wtbl_all(dev);
+	mt7615_check_offload_capability(dev);
+}
+EXPORT_SYMBOL_GPL(mt7615_init_work);
+
 static void
 mt7615_regd_notifier(struct wiphy *wiphy,
 		     struct regulatory_request *request)
@@ -307,11 +317,12 @@ mt7615_regd_notifier(struct wiphy *wiphy,
 	mt7615_init_txpower(dev, &mphy->sband_2g.sband);
 	mt7615_init_txpower(dev, &mphy->sband_5g.sband);
 
-	if (!(chandef->chan->flags & IEEE80211_CHAN_RADAR))
-		return;
-
 	mt7615_mutex_acquire(dev);
-	mt7615_dfs_init_radar_detector(phy);
+
+	if (chandef->chan->flags & IEEE80211_CHAN_RADAR)
+		mt7615_dfs_init_radar_detector(phy);
+	mt7615_mcu_set_channel_domain(phy);
+
 	mt7615_mutex_release(dev);
 }
 
@@ -497,7 +508,6 @@ void mt7615_init_device(struct mt7615_dev *dev)
 	dev->mphy.sband_2g.sband.ht_cap.cap |= IEEE80211_HT_CAP_LDPC_CODING;
 	dev->mphy.sband_5g.sband.ht_cap.cap |= IEEE80211_HT_CAP_LDPC_CODING;
 	dev->mphy.sband_5g.sband.vht_cap.cap |=
-			IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991 |
 			IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK;
 	mt7615_cap_dbdc_disable(dev);
 	dev->phy.dfs_state = -1;
